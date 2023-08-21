@@ -216,52 +216,132 @@ AsynSparseConvolution2D::ReturnType AsynSparseConvolution2D::forward(const Eigen
     return {new_update_location, output_feature_map, active_sites_map};
 }
 
-std::tuple<Eigen::MatrixXi, Eigen::MatrixXf, Eigen::MatrixXf, RuleBook> 
-AsynSparseConvolution2D::forward(const Eigen::MatrixXi& update_location, 
-                                 const Eigen::MatrixXf& feature_map, 
-                                 Eigen::Ref<ActiveMatrix> active_sites_map, 
-                                 RuleBook& rulebook)
+void AsynSparseConvolution2D::updateRulebooks(Eigen::Matrix<bool,-1,1> bool_new_active_site,
+                                              Eigen::Matrix<bool,-1,1> zero_input_update,
+                                              Eigen::VectorXi update_location_linear,
+                                              Eigen::Ref<ActiveMatrix>& active_sites_map, 
+                                              Eigen::VectorXi& new_update_location_linear,
+                                              RuleBook& rulebook)
 {
-    int H = feature_map.rows();
-    int W = feature_map.cols() / nIn_;
+    // find kernel update location
+    if (debug_)  std::cout << "Updating Rulebook." << std::endl;
+    int num_new_sites_to_update = update_location_linear.rows() * kernel_indices_.rows();
 
-    bool no_updates = (update_location.rows() == 0);
-    
-    // If no updates, initialize with zero 
-    Eigen::MatrixXi updated_location;
-    if (no_updates)
+    ActiveMatrix active_sites_to_update(num_new_sites_to_update,1);
+    for (int i=0; i<update_location_linear.rows(); i++) 
     {
-        updated_location = Eigen::MatrixXi::Zero(1, 2);
-    }
-    else
-    {
-        updated_location = update_location;
+        int j_ = update_location_linear(i) % rulebook.W_;
+        int i_ = update_location_linear(i) / rulebook.W_;
+
+        for (int j=0; j<kernel_indices_.rows(); j++)
+        {
+            int i_new = i_ + kernel_indices_(j, 0) - filter_size_/2;
+            int j_new = j_ + kernel_indices_(j, 1) - filter_size_/2;
+
+            int new_update_lin_idx = j_new + i_new*rulebook.W_;
+            int lin_idx = i * kernel_indices_.rows() + j ;
+
+            if (i_new >= 0 && j_new >= 0 && j_new < rulebook.W_ && i_new < rulebook.H_)
+            {
+                active_sites_to_update(lin_idx,0) = active_sites_map(new_update_lin_idx,0); //  N x k^2
+            }
+            else
+            {
+                active_sites_to_update(lin_idx,0) = Site::INACTIVE;
+            }
+        }
     }
 
-    Eigen::MatrixXf reshaped_feature_map = feature_map;
-    reshaped_feature_map.resize(Eigen::NoChange, nIn_);
-    
+    if (debug_)  std::cout << "Active sites to update: " << active_sites_to_update.cast<int>().transpose() << std::endl;
+
+    for (int i=0; i<update_location_linear.rows(); i++)
+        active_sites_map(update_location_linear(i)) = Site::UPDATED;
+
     if (first_layer_)
+        for (int i=0; i<zero_input_update.rows(); i++)
+            if (zero_input_update(i))
+                active_sites_map(update_location_linear(i)) = Site::NEW_INACTIVE;
+    
+    if (debug_)  std::cout << "active_sites_map: " << active_sites_map.cast<int>().transpose() << std::endl;
+    
+    for (int a_index=0; a_index<active_sites_to_update.rows(); a_index++)
     {
-        initMaps(H, W);
-        active_sites_map = initActiveMap(reshaped_feature_map, updated_location);
-        rulebook.initialize(H, W, filter_size_, dimension_);
+        if (active_sites_to_update(a_index) == Site::INACTIVE)
+            continue;
+
+        int k = a_index % filter_volume_;
+        int i_active_site = a_index / filter_volume_;
+        
+        int position_kernel = filter_volume_ - 1 - k;
+        int input_location = update_location_linear(i_active_site);
+
+        int i_input = input_location / rulebook.W_;
+        int j_input = input_location % rulebook.W_;
+
+        int i_output = i_input + filter_size_/2 - kernel_indices_(position_kernel, 0); 
+        int j_output = j_input + filter_size_/2 - kernel_indices_(position_kernel, 1); 
+
+        int output_location = j_output + i_output * rulebook.W_;
+
+        if (active_sites_map(output_location) == Site::NEW_ACTIVE) continue;
+
+        
+        if (active_sites_map(output_location) == Site::NEW_INACTIVE)
+            continue;
+
+        rulebook.addRule(position_kernel, input_location, output_location);
+
+        if (active_sites_map(output_location) == Site::ACTIVE)
+        {
+            new_update_location_linear.conservativeResize(new_update_location_linear.rows()+1, 
+                                                            new_update_location_linear.cols());
+            new_update_location_linear(new_update_location_linear.rows()-1) = output_location;
+            
+            active_sites_map(output_location) = Site::UPDATED;
+        }
     }
-    else
+
+    if (debug_) rulebook.print();
+
+    // Update New Active Site Rules
+    ActiveMatrix active_sites_map_copied = active_sites_map;
+
+    for (int i=0; i<bool_new_active_site.rows(); i++)
     {
-        initMaps(H, W);
-        // Flatten active sites map
-        active_sites_map.resize(Eigen::NoChange, 1);
+        if (bool_new_active_site(i))
+            active_sites_map(update_location_linear(i)) = Site::NEW_ACTIVE;
+        active_sites_map_copied(update_location_linear(i)) = Site::INACTIVE;
     }
 
-    // Here, the actual convolution computation would happen
-    // Assuming that the function signature of the C++ version is similar to Python version
-    Eigen::MatrixXi new_update_locations;
-    Eigen::MatrixXf output_map;
-    std::tie(new_update_locations, output_map, active_sites_map) = compute(update_location, reshaped_feature_map, active_sites_map, rulebook, no_updates);
+    if (debug_)  std::cout << "active sites map: " << active_sites_map.cast<int>().transpose() << std::endl;
+    if (debug_)  std::cout << "Updating New Active Rules: " << std::endl;
 
-    output_map.resize(H, W, nOut_);
-    active_sites_map.resize(H, W);
+    for (int i=0; i<bool_new_active_site.rows(); i++)
+    {
+        if (!bool_new_active_site(i))
+            continue;
+        int output_location = update_location_linear(i);
+        int i_ = output_location / rulebook.W_;
+        int j_ = output_location % rulebook.W_;
 
-    return std::make_tuple(new_update_locations, output_map, active_sites_map, rulebook);
+        for (int k=0; k<kernel_indices_.rows(); k++)
+        {
+            if (k==int(filter_volume_)/2) continue;
+
+            int i_new = i_ + kernel_indices_(k,0) - filter_size_/2;
+            int j_new = j_ + kernel_indices_(k,1) - filter_size_/2;
+            if (!(i_new >= 0 && j_new >= 0 && j_new < rulebook.W_ && i_new < rulebook.H_)) continue;
+            int input_location = j_new + i_new * (rulebook.W_);
+
+            if (active_sites_map_copied(input_location)==Site::INACTIVE)
+                continue;
+
+            if (debug_)  std::cout << "Kernel Index: " << kernel_indices_(k,0) << " " << kernel_indices_(k,1) << std::endl;
+            if (debug_)  std::cout << "Output Location Index: " << i_ << " " << j_  << std::endl;
+            if (debug_)  std::cout << "Input Location Index: " << i_new << " "<< j_new  << std::endl;
+            if (debug_)  std::cout << "Adding rule to rulebook: " << input_location << " " << output_location << " for k=" << k << std::endl;
+
+            rulebook.addRule(k, input_location, output_location);
+        }
+    }
 }

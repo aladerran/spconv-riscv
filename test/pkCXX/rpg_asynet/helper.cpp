@@ -98,6 +98,7 @@ createInput(int nIn = 1, std::vector<int> spatial_dimensions = {10, 20}, bool as
         asyn_update_locations.push_back(asyn_locations_i);
     }
 
+    // needs revise
     std::vector<Eigen::Matrix<int, 2, 1>> batch_update_locations;
     for (int i = 0; i < spatial_dimensions[0]; i++) {
         for (int j = 0; j < spatial_dimensions[1]; j++) {
@@ -114,9 +115,3 @@ createInput(int nIn = 1, std::vector<int> spatial_dimensions = {10, 20}, bool as
     }
 }
 
-void print_batch_update_locations(const std::vector<Eigen::Matrix<int, 2, 1>>& vec) {
-    std::cout << "batch update locations:" << std::endl;
-    for(const auto& matrix : vec) {
-        std::cout << matrix << std::endl;
-    }
-}

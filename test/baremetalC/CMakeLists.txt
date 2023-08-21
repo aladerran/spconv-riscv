@@ -30,7 +30,7 @@ target_include_directories(
     "${gemmini-rocc-tests_SOURCE_DIR}/riscv-tests/benchmarks/common"
 )
 
-add_executable(conv conv.c)
+add_executable(gemmini_conv conv.c)
 
-target_include_directories(conv PUBLIC "${gemmini-rocc-tests_SOURCE_DIR}")
-target_link_libraries(conv PUBLIC gemmini_rt)
+target_include_directories(gemmini_conv PUBLIC "${gemmini-rocc-tests_SOURCE_DIR}")
+target_link_libraries(gemmini_conv PUBLIC gemmini_rt)
