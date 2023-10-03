@@ -6,9 +6,9 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/cmake/riscv.cmake"
     CACHE FILEPATH "CMake toolchain file")
 
-project(gemmini-async_sparse LANGUAGES C CXX ASM)
+project(sparse_conv-riscv LANGUAGES C CXX ASM)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 
 # ---------------------------------------------------------------------------- #
 # Dependencies
@@ -27,5 +27,4 @@ FetchContent_MakeAvailable(gemmini-rocc-tests)
 # ---------------------------------------------------------------------------- #
 
 
-add_subdirectory(src)
 add_subdirectory(test)

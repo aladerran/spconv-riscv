@@ -1,3 +1,10 @@
-# Overview
+# Quick Start
 
-To be added..
+1. Run the following commands:
+```bash
+./setup.sh
+```
+
+```bash
+./run.sh
+```
