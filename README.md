@@ -2,7 +2,7 @@
 
 1. Run the following commands:
 ```bash
-./setup.sh
+./build.sh
 ```
 
 ```bash

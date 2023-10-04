@@ -1,8 +1,7 @@
 #pragma once
-
-#include <torch/torch.h>
-// #include <torch/extension.h>
-
+#include <vector>
+#include <algorithm>
+#include <stdexcept>
 
 void scatter_cpu(const int n_in, const int n_out, const int c,
                  const float *in_feat, float *out_feat, const int *kmap,
@@ -12,7 +11,7 @@ void scatter_cpu(const int n_in, const int n_out, const int c,
     if (out_pos < 0) {
       continue;
     }
-// #pragma omp parallel for
+#pragma omp parallel for
     for (int j = 0; j < c; j++) {
       out_feat[out_pos * c + j] += in_feat[i * c + j];
     }
@@ -27,86 +26,88 @@ void gather_cpu(const int n_k, const int n_in, const int c,
     if (in_pos < 0) {
       continue;
     }
-// #pragma omp parallel for
+#pragma omp parallel for
     for (int j = 0; j < c; j++) {
       out_feat[i * c + j] = in_feat[in_pos * c + j];
     }
   }
 }
 
-void convolution_forward_cpu(at::Tensor in_feat, at::Tensor out_feat,
-                             at::Tensor kernel, at::Tensor neighbor_map,
-                             at::Tensor neighbor_offset, const bool transpose) {
-  if (in_feat.size(1) != kernel.size(1)) {
-    throw std::invalid_argument("Input feature size and kernel size mismatch");
-  }
-
-  int out_nrows = out_feat.size(0);
-  out_feat.resize_({out_nrows, kernel.size(2)});
-  out_feat.zero_();
-
-  int kernel_volume = kernel.size(0);
-  int in_buffer_size = 1;
-  bool flag = false;
-  // memory optimization
-  if (kernel_volume % 2 && out_nrows == in_feat.size(0)) {
-    flag = true;
-    in_buffer_size =
-        *std::max_element(neighbor_offset.data_ptr<int>(),
-                          neighbor_offset.data_ptr<int>() + kernel_volume / 2);
-    in_buffer_size =
-        std::max(in_buffer_size,
-                 *std::max_element(
-                     neighbor_offset.data_ptr<int>() + kernel_volume / 2 + 1,
-                     neighbor_offset.data_ptr<int>() + kernel_volume));
-    in_buffer_size = std::max(in_buffer_size, 1);
-
-    torch::mm_out(out_feat, in_feat, kernel[kernel_volume / 2]);
-  } else {
-    in_buffer_size =
-        *std::max_element(neighbor_offset.data_ptr<int>(),
-                          neighbor_offset.data_ptr<int>() + kernel_volume);
-  }
-
-  auto options =
-      torch::TensorOptions().dtype(in_feat.dtype()).device(in_feat.device());
-  auto in_buffer = torch::zeros({in_buffer_size, in_feat.size(1)}, options);
-  auto out_buffer = torch::zeros({in_buffer_size, kernel.size(2)}, options);
-  int cur_offset = 0;
-  for (int i = 0; i < kernel_volume; i++) {
-    if (flag && (i == kernel_volume / 2)) {
-      cur_offset += 2 * neighbor_offset.data_ptr<int>()[i];
-      continue;
+void mm_out(float *out_data, const float *in_data, const float *kernel_data, 
+            int nrows, int k, int ncols) {
+  for (int i = 0; i < nrows; i++) {
+    for (int j = 0; j < ncols; j++) {
+      out_data[i * ncols + j] = 0;
+      for (int l = 0; l < k; l++) {
+        out_data[i * ncols + j] += in_data[i * k + l] * kernel_data[l * ncols + j];
+      }
     }
-
-    if (neighbor_offset.data_ptr<int>()[i] == 0) {
-      continue;
-    }
-
-    auto out_buffer_activated = torch::from_blob(
-        out_buffer.data_ptr<float>(),
-        {neighbor_offset.data_ptr<int>()[i], kernel.size(2)}, options);
-    auto in_buffer_activated = torch::from_blob(
-        in_buffer.data_ptr<float>(),
-        {neighbor_offset.data_ptr<int>()[i], in_feat.size(1)}, options);
-
-    // gather
-    gather_cpu(in_buffer_activated.size(0), in_feat.size(0), kernel.size(1),
-               in_feat.data_ptr<float>(), in_buffer_activated.data_ptr<float>(),
-               neighbor_map.data_ptr<int>() + cur_offset, transpose);
-
-    // matmul
-    torch::mm_out(out_buffer_activated, in_buffer_activated, kernel[i]);
-
-    // scatter
-    scatter_cpu(neighbor_offset.data_ptr<int>()[i], out_nrows, kernel.size(2),
-                out_buffer_activated.data_ptr<float>(),
-                out_feat.data_ptr<float>(),
-                neighbor_map.data_ptr<int>() + cur_offset, transpose);
-    cur_offset += 2 * neighbor_offset.data_ptr<int>()[i];
   }
 }
 
-void torchsparse_checker(){
-    printf("torchsparse included\n");
+void convolution_forward_cpu(const std::vector<float>& in_feat,
+                             std::vector<float>& out_feat,
+                             const std::vector<float>& kernel,
+                             const std::vector<int>& neighbor_map,
+                             const std::vector<int>& neighbor_offset, 
+                             const bool transpose, int c, int kernel_volume) {
+  
+  if (in_feat.size() / c != kernel.size() / (c * kernel_volume)) {
+    throw std::invalid_argument("Input feature size and kernel size mismatch");
+  }
+
+  int out_nrows = out_feat.size() / c;
+  out_feat.resize(out_nrows * kernel_volume);
+  std::fill(out_feat.begin(), out_feat.end(), 0.0f);
+
+  int in_buffer_size = 1;
+  bool flag = false;
+  // memory optimization
+  if (kernel_volume % 2 && out_nrows == in_feat.size() / c) {
+    flag = true;
+    in_buffer_size =
+        *std::max_element(neighbor_offset.begin(),
+                          neighbor_offset.begin() + kernel_volume / 2);
+    in_buffer_size =
+        std::max(in_buffer_size,
+                 *std::max_element(
+                     neighbor_offset.begin() + kernel_volume / 2 + 1,
+                     neighbor_offset.end()));
+    in_buffer_size = std::max(in_buffer_size, 1);
+
+    mm_out(&out_feat[0], &in_feat[0], &kernel[kernel_volume / 2 * c * c], 
+           out_nrows, c, c);
+  } else {
+    in_buffer_size =
+        *std::max_element(neighbor_offset.begin(), neighbor_offset.end());
+  }
+
+  std::vector<float> in_buffer(in_buffer_size * c, 0.0f);
+  std::vector<float> out_buffer(in_buffer_size * c, 0.0f);
+  int cur_offset = 0;
+  for (int i = 0; i < kernel_volume; i++) {
+    if (flag && (i == kernel_volume / 2)) {
+      cur_offset += 2 * neighbor_offset[i];
+      continue;
+    }
+
+    if (neighbor_offset[i] == 0) {
+      continue;
+    }
+
+    // gather
+    gather_cpu(neighbor_offset[i], in_feat.size() / c, c,
+               &in_feat[0], &in_buffer[0],
+               &neighbor_map[cur_offset], transpose);
+
+    // matmul
+    mm_out(&out_buffer[0], &in_buffer[0], &kernel[i * c * c], 
+           neighbor_offset[i], c, c);
+
+    // scatter
+    scatter_cpu(neighbor_offset[i], out_nrows, c,
+                &out_buffer[0], &out_feat[0], 
+                &neighbor_map[cur_offset], transpose);
+    cur_offset += 2 * neighbor_offset[i];
+  }
 }
