@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 mv build/_deps .
 cd build
