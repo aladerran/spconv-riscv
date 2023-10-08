@@ -1,113 +1,187 @@
-#pragma once
+#include <iostream>
 #include <vector>
 #include <algorithm>
 #include <stdexcept>
+#include <cstring> 
+#include "include/gemmini_testutils.h"
+
+void slow_matmul(float** A, float** B, float** C, int rowsA, int colsA, int rowsB, int colsB) {
+    for (int i = 0; i < rowsA; i++) {
+        for (int j = 0; j < colsB; j++) {
+            C[i][j] = 0.0f;
+            for (int k = 0; k < colsA; k++) {
+                C[i][j] += A[i][k] * B[k][j];
+            }
+        }
+    }
+}
+
+void gemmini_matmul(float** A, float** B, float** C, int rowsA, int colsA, int rowsB, int colsB) {
+    // elem_t flat_A[rowsA][colsA] row_align(1);
+    // elem_t flat_B[rowsB][colsB] row_align(1);
+    // elem_t flat_C[rowsA][colsB] row_align(1);
+
+    // for(int i = 0; i < rowsA; ++i) {
+    //     for(int j = 0; j < colsA; ++j) {
+    //         flat_A[i][j] = (elem_t) A[i][j];
+    //     }
+    // }
+
+    // for(int i = 0; i < rowsB; ++i) {
+    //     for(int j = 0; j < colsB; ++j) {
+    //         flat_B[i][j] = (elem_t) B[i][j];
+    //     }
+    // }
+
+    elem_t (*flat_A)[colsA] = (elem_t (*)[colsA]) A[0];
+    elem_t (*flat_B)[colsB] = (elem_t (*)[colsB]) B[0];
+    elem_t flat_C[rowsA][colsB] row_align(1);
+
+
+    tiled_matmul_auto(rowsA, colsB, colsA, 
+                    (elem_t*)A, (elem_t*)B, 
+                    NULL, (elem_t*)flat_C, 
+                    colsA, colsB, colsB, colsB, 
+                    MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY,
+                    NO_ACTIVATION, ACC_SCALE_IDENTITY, 0, false,
+                    false, false,
+                    false, 0,
+                    0,
+                    CPU);
+
+
+
+
+    for(int i = 0; i < rowsA; i++) {
+        for(int j = 0; j < colsB; j++) {
+            C[i][j] = (float) flat_C[i][j];
+        }
+    }
+
+}
 
 void scatter_cpu(const int n_in, const int n_out, const int c,
-                 const float *in_feat, float *out_feat, const int *kmap,
+                 float** in_feat, float** out_feat, const int* kmap,
                  const bool transpose) {
-  for (int i = 0; i < n_in; i++) {
-    int out_pos = kmap[2 * i + 1 - transpose];
-    if (out_pos < 0) {
-      continue;
+    for (int i = 0; i < n_in; i++) {
+        int out_pos = kmap[2 * i + 1 - transpose];
+        if (out_pos < 0) {
+            continue;
+        }
+        for (int j = 0; j < c; j++) {
+            out_feat[out_pos][j] += in_feat[i][j];
+        }
     }
-#pragma omp parallel for
-    for (int j = 0; j < c; j++) {
-      out_feat[out_pos * c + j] += in_feat[i * c + j];
-    }
-  }
 }
 
 void gather_cpu(const int n_k, const int n_in, const int c,
-                const float *in_feat, float *out_feat, const int *kmap,
+                float** in_feat, float** out_feat, const int* kmap,
                 const bool transpose) {
-  for (int i = 0; i < n_k; i++) {
-    int in_pos = kmap[2 * i + transpose];
-    if (in_pos < 0) {
-      continue;
+    for (int i = 0; i < n_k; i++) {
+        int in_pos = kmap[2 * i + transpose];
+        if (in_pos < 0) {
+            continue;
+        }
+        for (int j = 0; j < c; j++) {
+            out_feat[i][j] = in_feat[in_pos][j];
+        }
     }
-#pragma omp parallel for
-    for (int j = 0; j < c; j++) {
-      out_feat[i * c + j] = in_feat[in_pos * c + j];
-    }
-  }
 }
 
-void mm_out(float *out_data, const float *in_data, const float *kernel_data, 
-            int nrows, int k, int ncols) {
-  for (int i = 0; i < nrows; i++) {
-    for (int j = 0; j < ncols; j++) {
-      out_data[i * ncols + j] = 0;
-      for (int l = 0; l < k; l++) {
-        out_data[i * ncols + j] += in_data[i * k + l] * kernel_data[l * ncols + j];
-      }
+void convolution_forward_cpu(float** in_feat, int numRowsIn, int numColsIn,
+                             float** out_feat, int numRowsOut, int numColsOut,
+                             float*** kernel, int kernelVolume, int kernelRows, int kernelCols,
+                             int* neighbor_map, int* neighbor_offset, const bool transpose) {
+    if (numColsIn != kernelRows) {
+        throw std::invalid_argument("Input feature size and kernel size mismatch");
     }
-  }
+
+    for (int i = 0; i < numRowsOut; i++) {
+        for (int j = 0; j < numColsOut; j++) {
+            out_feat[i][j] = 0.0f;
+        }
+    }
+
+    int in_buffer_size = neighbor_offset[kernelVolume - 1];
+    float** in_buffer = new float*[in_buffer_size];
+    for (int i = 0; i < in_buffer_size; i++) {
+        in_buffer[i] = new float[numColsIn];
+    }
+
+    float** out_buffer = new float*[in_buffer_size];
+    for (int i = 0; i < in_buffer_size; i++) {
+        out_buffer[i] = new float[numColsOut];
+    }
+
+    int cur_offset = 0;
+    for (int i = 0; i < kernelVolume; i++) {
+        if (neighbor_offset[i] == 0) {
+            continue;
+        }
+
+        gather_cpu(neighbor_offset[i], numRowsIn, numColsIn,
+                   in_feat, in_buffer, neighbor_map + cur_offset, transpose);
+        slow_matmul(in_buffer, kernel[i], out_buffer, neighbor_offset[i], numColsIn, kernelRows, kernelCols);
+        scatter_cpu(neighbor_offset[i], numRowsOut, numColsOut,
+                    out_buffer, out_feat, neighbor_map + cur_offset, transpose);
+
+        cur_offset += 2 * neighbor_offset[i];
+    }
+
+    for (int i = 0; i < in_buffer_size; i++) {
+        delete[] in_buffer[i];
+        delete[] out_buffer[i];
+    }
+    delete[] in_buffer;
+    delete[] out_buffer;
 }
 
-void convolution_forward_cpu(const std::vector<float>& in_feat,
-                             std::vector<float>& out_feat,
-                             const std::vector<float>& kernel,
-                             const std::vector<int>& neighbor_map,
-                             const std::vector<int>& neighbor_offset, 
-                             const bool transpose, int c, int kernel_volume) {
-  
-  if (in_feat.size() / c != kernel.size() / (c * kernel_volume)) {
-    throw std::invalid_argument("Input feature size and kernel size mismatch");
-  }
-
-  int out_nrows = out_feat.size() / c;
-  out_feat.resize(out_nrows * kernel_volume);
-  std::fill(out_feat.begin(), out_feat.end(), 0.0f);
-
-  int in_buffer_size = 1;
-  bool flag = false;
-  // memory optimization
-  if (kernel_volume % 2 && out_nrows == in_feat.size() / c) {
-    flag = true;
-    in_buffer_size =
-        *std::max_element(neighbor_offset.begin(),
-                          neighbor_offset.begin() + kernel_volume / 2);
-    in_buffer_size =
-        std::max(in_buffer_size,
-                 *std::max_element(
-                     neighbor_offset.begin() + kernel_volume / 2 + 1,
-                     neighbor_offset.end()));
-    in_buffer_size = std::max(in_buffer_size, 1);
-
-    mm_out(&out_feat[0], &in_feat[0], &kernel[kernel_volume / 2 * c * c], 
-           out_nrows, c, c);
-  } else {
-    in_buffer_size =
-        *std::max_element(neighbor_offset.begin(), neighbor_offset.end());
-  }
-
-  std::vector<float> in_buffer(in_buffer_size * c, 0.0f);
-  std::vector<float> out_buffer(in_buffer_size * c, 0.0f);
-  int cur_offset = 0;
-  for (int i = 0; i < kernel_volume; i++) {
-    if (flag && (i == kernel_volume / 2)) {
-      cur_offset += 2 * neighbor_offset[i];
-      continue;
+void convolution_forward_gemmini(float** in_feat, int numRowsIn, int numColsIn,
+                             float** out_feat, int numRowsOut, int numColsOut,
+                             float*** kernel, int kernelVolume, int kernelRows, int kernelCols,
+                             int* neighbor_map, int* neighbor_offset, const bool transpose) {
+    if (numColsIn != kernelRows) {
+        throw std::invalid_argument("Input feature size and kernel size mismatch");
     }
 
-    if (neighbor_offset[i] == 0) {
-      continue;
+    for (int i = 0; i < numRowsOut; i++) {
+        for (int j = 0; j < numColsOut; j++) {
+            out_feat[i][j] = 0.0f;
+        }
     }
 
-    // gather
-    gather_cpu(neighbor_offset[i], in_feat.size() / c, c,
-               &in_feat[0], &in_buffer[0],
-               &neighbor_map[cur_offset], transpose);
+    int in_buffer_size = neighbor_offset[kernelVolume - 1];
+    float** in_buffer = new float*[in_buffer_size];
+    for (int i = 0; i < in_buffer_size; i++) {
+        in_buffer[i] = new float[numColsIn];
+    }
 
-    // matmul
-    mm_out(&out_buffer[0], &in_buffer[0], &kernel[i * c * c], 
-           neighbor_offset[i], c, c);
+    float** out_buffer = new float*[in_buffer_size];
+    for (int i = 0; i < in_buffer_size; i++) {
+        out_buffer[i] = new float[numColsOut];
+    }
 
-    // scatter
-    scatter_cpu(neighbor_offset[i], out_nrows, c,
-                &out_buffer[0], &out_feat[0], 
-                &neighbor_map[cur_offset], transpose);
-    cur_offset += 2 * neighbor_offset[i];
-  }
+    int cur_offset = 0;
+    for (int i = 0; i < kernelVolume; i++) {
+        if (neighbor_offset[i] == 0) {
+            continue;
+        }
+
+        gather_cpu(neighbor_offset[i], numRowsIn, numColsIn,
+                   in_feat, in_buffer, neighbor_map + cur_offset, transpose);
+
+        gemmini_matmul(in_buffer, kernel[i], out_buffer, neighbor_offset[i], numColsIn, kernelRows, kernelCols);
+        
+        scatter_cpu(neighbor_offset[i], numRowsOut, numColsOut,
+                    out_buffer, out_feat, neighbor_map + cur_offset, transpose);
+
+        cur_offset += 2 * neighbor_offset[i];
+    }
+
+    for (int i = 0; i < in_buffer_size; i++) {
+        delete[] in_buffer[i];
+        delete[] out_buffer[i];
+    }
+    delete[] in_buffer;
+    delete[] out_buffer;
 }

@@ -1,9 +1,6 @@
 # ---------------------------------------------------------------------------- #
 # Add gemmini conv tests
 
-set(CMAKE_C_COMPILER "${RISCV}/bin/riscv64-unknown-elf-gcc")
-set(CMAKE_CXX_COMPILER "${RISCV}/bin/riscv64-unknown-elf-g++")
-
 add_compile_definitions(BAREMETAL=1)
 add_compile_options(-mcmodel=medany -fno-tree-loop-distribute-patterns -fno-builtin-printf -fno-common)
 add_link_options(-nostartfiles -nostdlib)

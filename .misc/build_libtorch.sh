@@ -3,18 +3,18 @@ set -e
 # A script for mamually building Libtorch for RISC-V
 
 
-# if [ ! -d pytorch ]; then
-#     git clone --recursive https://github.com/pytorch/pytorch.git
-# fi
+if [ ! -d pytorch ]; then
+    git clone --recursive https://github.com/pytorch/pytorch.git
+fi
 
 
-# cd pytorch
-# git fetch --all
-# git checkout v2.0.0
-# git submodule update --init --recursive 
-# cp -r ../.misc/helperpurec_scalar.h third_party/sleef/src/arch/helperpurec_scalar.h
+cd pytorch
+git fetch --all
+git checkout v2.0.0
+git submodule update --init --recursive 
+cp -r ../.misc/helperpurec_scalar.h third_party/sleef/src/arch/helperpurec_scalar.h
 
-# rm -rf build && mkdir build && cd build
+rm -rf build && mkdir build && cd build
 
 cd pytorch/build
 
