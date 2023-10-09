@@ -3,35 +3,36 @@
 #include <algorithm>
 #include <stdexcept>
 #include <vector>
+#include <cstdint>
 
 const int MAX_NEIGHBORS = 8;
 
-// Random float generation
-float randomFloat(float a, float b) {
-    return (b - a) * ((float)rand() / RAND_MAX) + a;
+// Random int8_t generation
+int8_t randomInt8(int8_t a, int8_t b) {
+    return a + rand() % (b - a + 1);
 }
 
 // Generate a randomized input feature tensor
-float** generateInFeat(int n, int c) {
-    float** in_feat = new float*[n];
+int8_t** generateInFeat(int n, int c) {
+    int8_t** in_feat = new int8_t*[n];
     for (int i = 0; i < n; i++) {
-        in_feat[i] = new float[c];
+        in_feat[i] = new int8_t[c];
         for (int j = 0; j < c; j++) {
-            in_feat[i][j] = randomFloat(-10.0f, 10.0f);
+            in_feat[i][j] = randomInt8(-128, 127);  // full int8_t range
         }
     }
     return in_feat;
 }
 
 // Generate a randomized kernel tensor
-float*** generateKernel(int k, int in_channels, int out_channels) {
-    float*** kernel = new float**[k];
+int8_t*** generateKernel(int k, int in_channels, int out_channels) {
+    int8_t*** kernel = new int8_t**[k];
     for (int i = 0; i < k; i++) {
-        kernel[i] = new float*[in_channels];
+        kernel[i] = new int8_t*[in_channels];
         for (int j = 0; j < in_channels; j++) {
-            kernel[i][j] = new float[out_channels];
+            kernel[i][j] = new int8_t[out_channels];
             for (int l = 0; l < out_channels; l++) {
-                kernel[i][j][l] = randomFloat(-1.0f, 1.0f);
+                kernel[i][j][l] = randomInt8(-128, 127);  // full int8_t range
             }
         }
     }

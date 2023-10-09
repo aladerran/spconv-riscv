@@ -19,7 +19,7 @@ include(FetchContent)
 FetchContent_Declare(
   gemmini-rocc-tests
   GIT_REPOSITORY https://github.com/ucb-bar/gemmini-rocc-tests.git
-  GIT_TAG        6ad9474
+  GIT_TAG        ae0cd82
 )
 
 FetchContent_MakeAvailable(gemmini-rocc-tests)

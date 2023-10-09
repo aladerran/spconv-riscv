@@ -90,6 +90,10 @@ int main() {
     }
 #endif
 
+    printf("MAT_DIM_I: %d\n", MAT_DIM_I);
+    printf("MAT_DIM_J: %d\n", MAT_DIM_J);
+    printf("MAT_DIM_K: %d\n", MAT_DIM_K);
+
     gemmini_flush(0);
 
     static elem_t full_A[MAT_DIM_I][MAT_DIM_K] row_align(1);

@@ -31,6 +31,10 @@ target_include_directories(
 )
 
 add_executable(gemmini_conv conv.c)
+add_executable(gemmini_matmul matmul.c)
 
 target_include_directories(gemmini_conv PUBLIC "${gemmini-rocc-tests_SOURCE_DIR}")
 target_link_libraries(gemmini_conv PUBLIC gemmini_rt)
+
+target_include_directories(gemmini_matmul PUBLIC "${gemmini-rocc-tests_SOURCE_DIR}")
+target_link_libraries(gemmini_matmul PUBLIC gemmini_rt)

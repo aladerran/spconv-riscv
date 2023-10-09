@@ -15,3 +15,4 @@ add_executable(
 # target_include_directories(torchsparse_conv PUBLIC ${TORCH_INCLUDE_DIRS}) #TODO: Add Libtorch for RISC-V
 # target_link_libraries(torchsparse_conv PUBLIC ${TORCH_LIBRARIES})
 target_include_directories(torchsparse_conv PUBLIC "${gemmini-rocc-tests_SOURCE_DIR}")
+target_include_directories(torchsparse_conv PUBLIC "${CMAKE_SOURCE_DIR}/google/usr/local/include")

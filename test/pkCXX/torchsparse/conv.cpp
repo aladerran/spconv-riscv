@@ -1,6 +1,8 @@
 #include "convolution_cpu.h"
+#include "hashmap_cpu.h"
 #include "helper.h"
 #include "include/gemmini_testutils.h"
+#include <cstdint>
 
 int main() {
     
@@ -9,8 +11,8 @@ int main() {
     int k = 3; 
     int out_c = 6;
 
-    float** in_feat = generateInFeat(n, c);
-    float*** kernel = generateKernel(k, c, out_c);
+    int8_t** in_feat = generateInFeat(n, c);
+    int8_t*** kernel = generateKernel(k, c, out_c);
     int* neighbor_map = generateNeighborMap(n);
     int* neighbor_offset = generateNeighborOffset(k);
 
@@ -18,19 +20,19 @@ int main() {
     printf("in_feat:\n");
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < out_c; j++) {
-            std::cout << in_feat[i][j] << " ";
+            std::cout << static_cast<int>(in_feat[i][j]) << " ";  // Convert to int for printing
         }
         std::cout << std::endl;
     }
 
-    float** out_feat = new float*[n];
+    int8_t** out_feat = new int8_t*[n];
     for (int i = 0; i < n; i++) {
-        out_feat[i] = new float[out_c];
+        out_feat[i] = new int8_t[out_c];
     }
 
-    float** out_feat_gemmini = new float*[n];
+    int8_t** out_feat_gemmini = new int8_t*[n];
     for (int i = 0; i < n; i++) {
-        out_feat_gemmini[i] = new float[out_c];
+        out_feat_gemmini[i] = new int8_t[out_c];
     }
 
     uint64_t start = read_cycles();
@@ -44,20 +46,20 @@ int main() {
     printf("Torchsparse convolution_forward_gemmini took %d cycles\n", gemmini_end-gemmini_start);
     
 
-    printf("out_feat shape:\n");
+    printf("out_feat_cpu:\n");
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < out_c; j++) {
-            std::cout << out_feat[i][j] << " ";
+            std::cout << static_cast<int>(out_feat[i][j]) << " ";  // Convert to int for printing
         }
         std::cout << std::endl;
         delete[] out_feat[i];
     }
     delete[] out_feat;
 
-    printf("out_feat_gemmini shape:\n");
+    printf("out_feat_gemmini:\n");
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < out_c; j++) {
-            std::cout << out_feat_gemmini[i][j] << " ";
+            std::cout << static_cast<int>(out_feat_gemmini[i][j]) << " ";  // Convert to int for printing
         }
         std::cout << std::endl;
         delete[] out_feat_gemmini[i];
@@ -82,10 +84,3 @@ int main() {
 
     return 0;
 }
-    
-    
-    // uint64_t start = read_cycles();
-
-    // uint64_t end = read_cycles();
-
-    // printf("torchsparse took %d cycles\n", end-start);
