@@ -1,86 +1,97 @@
 #include "convolution_cpu.h"
 #include "hashmap_cpu.h"
-#include "helper.h"
-#include "include/gemmini_testutils.h"
-#include <cstdint>
+#include "hash_cpu.h"
+#include "query_cpu.h"
+#include "gemmini_testutils.h"
+#include <iostream>
+#include <vector>
+#include <random>
 
 int main() {
-    
-    int n = 5; 
-    int c = 4; 
-    int k = 3; 
-    int out_c = 6;
+    const int in_nrows = 24;
+    const int out_nrows = 24;
+    const int kernel_volume = 3;
+    const int c = 3;
 
-    int8_t** in_feat = generateInFeat(n, c);
-    int8_t*** kernel = generateKernel(k, c, out_c);
-    int* neighbor_map = generateNeighborMap(n);
-    int* neighbor_offset = generateNeighborOffset(k);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0, 1.0);
 
-    // Print the input
-    printf("in_feat:\n");
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < out_c; j++) {
-            std::cout << static_cast<int>(in_feat[i][j]) << " ";  // Convert to int for printing
+    std::vector<float> in_feat(in_nrows * c);
+    std::vector<float> kernel(kernel_volume * c * c);
+    std::vector<int> neighbor_map(kernel_volume * in_nrows * 2);
+    std::vector<int> neighbor_offset(kernel_volume);
+
+    for (auto& val : in_feat) val = dis(gen);
+    for (auto& val : kernel) val = dis(gen);
+    for (auto& val : neighbor_map) val = dis(gen) * in_nrows;
+    for (auto& val : neighbor_offset) val = dis(gen) * in_nrows;
+
+    std::vector<float> out_feat(out_nrows * c);
+    std::vector<float> out_feat_gemmini(out_nrows * c);
+
+    bool transpose = false;
+
+    int64_t cpu_start = read_cycles();
+    convolution_forward_cpu(in_feat.data(), out_feat.data(), kernel.data(),
+                            neighbor_map.data(), neighbor_offset.data(),
+                            transpose, in_nrows, out_nrows, kernel_volume, c, CPU);
+    int64_t cpu_end = read_cycles();
+    std::cout << "Naive forward took " << cpu_end-cpu_start << " cycles" << std::endl;
+
+    int64_t gemmini_start = read_cycles();
+    convolution_forward_cpu(in_feat.data(), out_feat_gemmini.data(), kernel.data(),
+                            neighbor_map.data(), neighbor_offset.data(),
+                            transpose, in_nrows, out_nrows, kernel_volume, c, WS);            
+    int64_t gemmini_end = read_cycles();
+    std::cout << "Gemmini forward took " << gemmini_end-gemmini_start << " cycles" << std::endl;
+
+
+    std::cout << "=====Output feature_map=====" << std::endl;
+    for (int i = 0; i < out_nrows; ++i) {
+        for (int j = 0; j < c; ++j) {
+            std::cout << out_feat[i * c + j] << " ";
         }
         std::cout << std::endl;
     }
 
-    int8_t** out_feat = new int8_t*[n];
-    for (int i = 0; i < n; i++) {
-        out_feat[i] = new int8_t[out_c];
-    }
-
-    int8_t** out_feat_gemmini = new int8_t*[n];
-    for (int i = 0; i < n; i++) {
-        out_feat_gemmini[i] = new int8_t[out_c];
-    }
-
-    uint64_t start = read_cycles();
-    convolution_forward_cpu(in_feat, n, c, out_feat, n, out_c, kernel, k, c, out_c, neighbor_map, neighbor_offset, false);
-    uint64_t end = read_cycles();
-    printf("Torchsparse convolution_forward_cpu took %d cycles\n", end-start);
-
-    uint64_t gemmini_start = read_cycles();
-    convolution_forward_gemmini(in_feat, n, c, out_feat_gemmini, n, out_c, kernel, k, c, out_c, neighbor_map, neighbor_offset, false);
-    uint64_t gemmini_end = read_cycles();
-    printf("Torchsparse convolution_forward_gemmini took %d cycles\n", gemmini_end-gemmini_start);
-    
-
-    printf("out_feat_cpu:\n");
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < out_c; j++) {
-            std::cout << static_cast<int>(out_feat[i][j]) << " ";  // Convert to int for printing
+    std::cout << "=====Output feature_map_gemmini=====" << std::endl;
+    for (int i = 0; i < out_nrows; ++i) {
+        for (int j = 0; j < c; ++j) {
+            std::cout << out_feat_gemmini[i * c + j] << " ";
         }
         std::cout << std::endl;
-        delete[] out_feat[i];
     }
-    delete[] out_feat;
-
-    printf("out_feat_gemmini:\n");
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < out_c; j++) {
-            std::cout << static_cast<int>(out_feat_gemmini[i][j]) << " ";  // Convert to int for printing
-        }
-        std::cout << std::endl;
-        delete[] out_feat_gemmini[i];
-    }
-    delete[] out_feat_gemmini;
-
-    for (int i = 0; i < n; i++) {
-        delete[] in_feat[i];
-    }
-    delete[] in_feat;
-
-    for (int i = 0; i < k; i++) {
-        for (int j = 0; j < c; j++) {
-            delete[] kernel[i][j];
-        }
-        delete[] kernel[i];
-    }
-    delete[] kernel;
-
-    delete[] neighbor_map;
-    delete[] neighbor_offset;
 
     return 0;
 }
+
+
+
+// int main() {
+//     // Create an instance of HashTableCPU
+//     HashTableCPU table;
+
+//     // Define some keys and values to insert
+//     const int num_inserts = 10;
+//     int64_t keys_to_insert[num_inserts] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+//     int64_t values_to_insert[num_inserts] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+
+//     // Insert the keys and values
+//     table.insert_vals(keys_to_insert, values_to_insert, num_inserts);
+
+//     // Define some keys to look up
+//     const int num_lookups = 5;
+//     int64_t keys_to_lookup[num_lookups] = {3, 4, 5, 11, 12};  // Includes some keys not present in the table
+//     int64_t lookup_results[num_lookups];
+
+//     // Look up the keys
+//     table.lookup_vals(keys_to_lookup, lookup_results, num_lookups);
+
+//     // Print the results
+//     for (int i = 0; i < num_lookups; ++i) {
+//         std::cout << "Key: " << keys_to_lookup[i] << ", Value: " << lookup_results[i] << std::endl;
+//     }
+
+//     return 0;
+// }
