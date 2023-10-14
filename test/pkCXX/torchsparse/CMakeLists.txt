@@ -11,7 +11,7 @@ add_executable(
 )
 
 # target_include_directories(torchsparse_conv PUBLIC ${Python3_INCLUDE_DIRS})
-# target_include_directories(torchsparse_conv PUBLIC ${TORCH_INCLUDE_DIRS}) #TODO: Add Libtorch for RISC-V
-# target_link_libraries(torchsparse_conv PUBLIC ${TORCH_LIBRARIES})
+# target_include_directories(torchsparse_conv PUBLIC ${TORCH_INCLUDE_DIRS}) 
+# target_link_libraries(torchsparse_conv PUBLIC ${TORCH_LIBRARIES}) # TODO: Add Libtorch for RISC-V
 target_include_directories(torchsparse_conv PUBLIC "${CMAKE_SOURCE_DIR}/src")
 target_include_directories(torchsparse_conv PUBLIC "${CMAKE_SOURCE_DIR}/google/include")

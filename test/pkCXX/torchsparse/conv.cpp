@@ -8,8 +8,8 @@
 #include <random>
 
 int main() {
-    const int in_nrows = 24;
-    const int out_nrows = 24;
+    const int in_nrows = 10;
+    const int out_nrows = 10;
     const int kernel_volume = 3;
     const int c = 3;
 
