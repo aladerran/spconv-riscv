@@ -1,97 +1,77 @@
 #include "convolution_cpu.h"
-#include "hashmap_cpu.h"
 #include "hash_cpu.h"
 #include "query_cpu.h"
 #include "gemmini_testutils.h"
+#include "helper.h"
 #include <iostream>
 #include <vector>
 #include <random>
 
 int main() {
-    const int in_nrows = 10;
-    const int out_nrows = 10;
-    const int kernel_volume = 3;
-    const int c = 3;
+    const int in_nrows = 36;
+    const int out_nrows = 36;
+    const int kernel_volume = 5;
+    const int in_channels = 3;
+    const int out_channels = 2;
+    bool transpose = true;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 1.0);
+    std::cout << "Randomizing input..." << std::endl;
 
-    std::vector<float> in_feat(in_nrows * c);
-    std::vector<float> kernel(kernel_volume * c * c);
-    std::vector<int> neighbor_map(kernel_volume * in_nrows * 2);
-    std::vector<int> neighbor_offset(kernel_volume);
+    auto test_data_conv = generate_test_conv(in_nrows, kernel_volume, in_channels, out_channels);
+    auto in_feat = std::get<0>(test_data_conv);
+    auto kernel = std::get<1>(test_data_conv);
+    auto neighbor_map = std::get<2>(test_data_conv);
+    auto neighbor_offset = std::get<3>(test_data_conv);
 
-    for (auto& val : in_feat) val = dis(gen);
-    for (auto& val : kernel) val = dis(gen);
-    for (auto& val : neighbor_map) val = dis(gen) * in_nrows;
-    for (auto& val : neighbor_offset) val = dis(gen) * in_nrows;
+    std::vector<float> out_feat(out_nrows * out_channels);
+    std::vector<float> out_feat_gemmini(out_nrows * out_channels);
 
-    std::vector<float> out_feat(out_nrows * c);
-    std::vector<float> out_feat_gemmini(out_nrows * c);
-
-    bool transpose = false;
+    std::cout << "=========Test convolution_forward_cpu begins=========" << std::endl;
 
     int64_t cpu_start = read_cycles();
-    convolution_forward_cpu(in_feat.data(), out_feat.data(), kernel.data(),
-                            neighbor_map.data(), neighbor_offset.data(),
-                            transpose, in_nrows, out_nrows, kernel_volume, c, CPU);
+    convolution_forward_cpu(in_feat, out_feat, kernel,
+                            neighbor_map, neighbor_offset,
+                            transpose, in_channels, out_channels, in_nrows, out_nrows, kernel_volume, CPU);
     int64_t cpu_end = read_cycles();
     std::cout << "Naive forward took " << cpu_end-cpu_start << " cycles" << std::endl;
 
     int64_t gemmini_start = read_cycles();
-    convolution_forward_cpu(in_feat.data(), out_feat_gemmini.data(), kernel.data(),
-                            neighbor_map.data(), neighbor_offset.data(),
-                            transpose, in_nrows, out_nrows, kernel_volume, c, WS);            
+    convolution_forward_cpu(in_feat, out_feat_gemmini, kernel,
+                            neighbor_map, neighbor_offset,
+                            transpose, in_channels, out_channels, in_nrows, out_nrows, kernel_volume, WS);
     int64_t gemmini_end = read_cycles();
     std::cout << "Gemmini forward took " << gemmini_end-gemmini_start << " cycles" << std::endl;
 
-
-    std::cout << "=====Output feature_map=====" << std::endl;
-    for (int i = 0; i < out_nrows; ++i) {
-        for (int j = 0; j < c; ++j) {
-            std::cout << out_feat[i * c + j] << " ";
-        }
-        std::cout << std::endl;
+    if (check_featureMap(out_feat, out_feat_gemmini, out_nrows, out_channels)) {
+        std::cout << "=========Test convolution_forward_cpu succeeds=========" << std::endl;
+    } else {
+        std::cout << "=========Test convolution_forward_cpu fails=========" << std::endl;
+        print_featureMap("Output feature_map", out_feat, out_nrows, out_channels);
+        print_featureMap("Output feature_map_gemmini", out_feat_gemmini, out_nrows, out_channels);
     }
 
-    std::cout << "=====Output feature_map_gemmini=====" << std::endl;
-    for (int i = 0; i < out_nrows; ++i) {
-        for (int j = 0; j < c; ++j) {
-            std::cout << out_feat_gemmini[i * c + j] << " ";
-        }
-        std::cout << std::endl;
-    }
+    // std::cout << "=========Test hashmap_cpu begins=========" << std::endl;
 
+    // HashTableCPU table;
+    // const int num_lookups = 5;
+    // int64_t keys_to_lookup[num_lookups] = {0, 1, 2, 3, 4};
+    // int64_t lookup_results[num_lookups];
+    // // table.insert_vals(); // torchsparse doesn't implement insert module
+    // table.lookup_vals(keys_to_lookup, lookup_results, num_lookups);
+    // for (int i = 0; i < num_lookups; ++i) {
+    //     std::cout << "Key: " << keys_to_lookup[i] << ", Value: " << lookup_results[i] << std::endl;
+    // }
+
+    // std::cout << "=========Test hashmap_cpu ends=========" << std::endl;
+
+    // std::cout << "=========Test generate_pc starts=========" << std::endl;
+
+
+    // std::cout << "=========Test generate_pc ends=========" << std::endl;
+ 
+ 
     return 0;
+
 }
 
 
-
-// int main() {
-//     // Create an instance of HashTableCPU
-//     HashTableCPU table;
-
-//     // Define some keys and values to insert
-//     const int num_inserts = 10;
-//     int64_t keys_to_insert[num_inserts] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-//     int64_t values_to_insert[num_inserts] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-
-//     // Insert the keys and values
-//     table.insert_vals(keys_to_insert, values_to_insert, num_inserts);
-
-//     // Define some keys to look up
-//     const int num_lookups = 5;
-//     int64_t keys_to_lookup[num_lookups] = {3, 4, 5, 11, 12};  // Includes some keys not present in the table
-//     int64_t lookup_results[num_lookups];
-
-//     // Look up the keys
-//     table.lookup_vals(keys_to_lookup, lookup_results, num_lookups);
-
-//     // Print the results
-//     for (int i = 0; i < num_lookups; ++i) {
-//         std::cout << "Key: " << keys_to_lookup[i] << ", Value: " << lookup_results[i] << std::endl;
-//     }
-
-//     return 0;
-// }

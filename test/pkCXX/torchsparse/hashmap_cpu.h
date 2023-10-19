@@ -27,7 +27,6 @@ class HashTableCPU {
 
 void HashTableCPU::lookup_vals(const int64_t* const keys,
                                int64_t* const results, const int n) {
-#pragma omp parallel for
   for (int idx = 0; idx < n; idx++) {
     int64_t key = keys[idx];
     google::dense_hash_map<int64_t, int64_t>::iterator iter = hashmap.find(key);

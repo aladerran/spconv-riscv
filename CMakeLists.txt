@@ -1,14 +1,11 @@
 cmake_minimum_required(VERSION 3.22)
 
-# NOTICE: this project only has any hope of compiling with the RISC-V toolchain
-# provided by UCB-BAR. Thus, the included toolchain file is set by default, even
-# though this is typically a bad idea.
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/cmake/riscv.cmake"
     CACHE FILEPATH "CMake toolchain file")
 
 project(sparse_conv-riscv LANGUAGES C CXX ASM)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 11)
 
 # ---------------------------------------------------------------------------- #
 # Dependencies
