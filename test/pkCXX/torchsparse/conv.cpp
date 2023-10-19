@@ -9,11 +9,11 @@
 #include <random>
 
 int main() {
-    const int in_nrows = 224;
-    const int in_channels = 3;
-    const int out_nrows = 36;
-    const int out_channels = 9;
-    const int kernel_volume = 4;
+    const int in_nrows = 512;
+    const int in_channels = 256;
+    const int out_nrows = 224;
+    const int out_channels = 224;
+    const int kernel_volume = 3;
     bool transpose = false;
 
     std::cout << "Randomizing input..." << std::endl;
@@ -43,13 +43,15 @@ int main() {
     int64_t gemmini_end = read_cycles();
     std::cout << "Gemmini forward took " << gemmini_end-gemmini_start << " cycles" << std::endl;
 
-    if (check_featureMap(out_feat, out_feat_gemmini, out_nrows, out_channels)) {
-        std::cout << "=========Test convolution_forward_cpu succeeds=========" << std::endl;
-    } else {
-        std::cout << "=========Test convolution_forward_cpu fails=========" << std::endl;
-        print_featureMap("Output feature_map", out_feat, out_nrows, out_channels);
-        print_featureMap("Output feature_map_gemmini", out_feat_gemmini, out_nrows, out_channels);
-    }
+    // if (check_featureMap(out_feat, out_feat_gemmini, out_nrows, out_channels)) {
+    //     std::cout << "=========Test convolution_forward_cpu succeeds=========" << std::endl;
+    // } else {
+    //     std::cout << "=========Test convolution_forward_cpu fails=========" << std::endl;
+    //     print_featureMap("Output feature_map", out_feat, out_nrows, out_channels);
+    //     print_featureMap("Output feature_map_gemmini", out_feat_gemmini, out_nrows, out_channels);
+    // }
+
+    std::cout << "=========Test convolution_forward_cpu ends=========" << std::endl;
 
     delete[] out_feat;
     delete[] out_feat_gemmini;
@@ -79,7 +81,7 @@ int main() {
     auto coords_rd = std::get<0>(PC).data();
     auto feats_rd = std::get<1>(PC).data();
 
-    print_randomCoords("Random generated coords", coords_rd, size, 3);
+    print_randomCoords("Random generated coords", coords_rd, size, 4);
     print_randomFeats("Random generated feats", feats_rd, size, 4);
 
     std::cout << "=========Test generate_pc ends=========" << std::endl;

@@ -77,6 +77,8 @@ bool check_hash(const int64_t* arr1, const int64_t* arr2, size_t size) {
 #include <iostream>
 #include <cmath>
 
+
+// Functions to generate point-cloud data
 struct Point {
     int x, y, z;
 };
@@ -106,6 +108,19 @@ std::vector<Point> sparseQuantize(const std::vector<Point>& coords, float voxelS
     return result;
 }
 
+std::vector<int> append_batchInfo(const std::vector<int>& originalCoords) {
+    std::vector<int> newCoords(originalCoords.size() / 3 * 4, 0);
+
+    for (size_t i = 0; i < originalCoords.size() / 3; ++i) {
+        newCoords[i * 4] = originalCoords[i * 3];        
+        newCoords[i * 4 + 1] = originalCoords[i * 3 + 1]; 
+        newCoords[i * 4 + 2] = originalCoords[i * 3 + 2]; 
+        // Fourth dimension is already initialized to 0
+    }
+
+    return newCoords;
+}
+
 std::pair<std::vector<int>, std::vector<float>> generateRandomPointCloud(int size = 10000, float voxelSize = 0.2) {
     std::vector<int> coords(size * 3);  // Flatten to 1D vector
     std::vector<float> feats(size * 4);  // Flatten to 1D vector
@@ -132,7 +147,7 @@ std::pair<std::vector<int>, std::vector<float>> generateRandomPointCloud(int siz
         resultCoords[i * 3 + 2] = uniqueCoords[i].z;
     }
 
-    return {resultCoords, feats};
+    return {append_batchInfo(resultCoords), feats};
 }
 
 // Functions to print out point-cloud data
