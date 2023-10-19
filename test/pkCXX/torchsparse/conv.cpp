@@ -1,5 +1,6 @@
 #include "convolution_cpu.h"
 #include "hash_cpu.h"
+#include "hashmap_cpu.h"
 #include "query_cpu.h"
 #include "gemmini_testutils.h"
 #include "helper.h"
@@ -8,23 +9,23 @@
 #include <random>
 
 int main() {
-    const int in_nrows = 36;
-    const int out_nrows = 36;
-    const int kernel_volume = 5;
+    const int in_nrows = 224;
     const int in_channels = 3;
-    const int out_channels = 2;
-    bool transpose = true;
+    const int out_nrows = 36;
+    const int out_channels = 9;
+    const int kernel_volume = 4;
+    bool transpose = false;
 
     std::cout << "Randomizing input..." << std::endl;
 
     auto test_data_conv = generate_test_conv(in_nrows, kernel_volume, in_channels, out_channels);
-    auto in_feat = std::get<0>(test_data_conv);
-    auto kernel = std::get<1>(test_data_conv);
-    auto neighbor_map = std::get<2>(test_data_conv);
-    auto neighbor_offset = std::get<3>(test_data_conv);
-
-    std::vector<float> out_feat(out_nrows * out_channels);
-    std::vector<float> out_feat_gemmini(out_nrows * out_channels);
+    float* in_feat = std::get<0>(test_data_conv).data();
+    float* kernel = std::get<1>(test_data_conv).data();
+    int* neighbor_map = std::get<2>(test_data_conv).data();
+    int* neighbor_offset = std::get<3>(test_data_conv).data();
+    // Allocate memory for output features
+    float* out_feat = new float[out_nrows * out_channels];
+    float* out_feat_gemmini = new float[out_nrows * out_channels];
 
     std::cout << "=========Test convolution_forward_cpu begins=========" << std::endl;
 
@@ -50,25 +51,40 @@ int main() {
         print_featureMap("Output feature_map_gemmini", out_feat_gemmini, out_nrows, out_channels);
     }
 
-    // std::cout << "=========Test hashmap_cpu begins=========" << std::endl;
+    delete[] out_feat;
+    delete[] out_feat_gemmini;
 
-    // HashTableCPU table;
-    // const int num_lookups = 5;
-    // int64_t keys_to_lookup[num_lookups] = {0, 1, 2, 3, 4};
-    // int64_t lookup_results[num_lookups];
-    // // table.insert_vals(); // torchsparse doesn't implement insert module
-    // table.lookup_vals(keys_to_lookup, lookup_results, num_lookups);
-    // for (int i = 0; i < num_lookups; ++i) {
-    //     std::cout << "Key: " << keys_to_lookup[i] << ", Value: " << lookup_results[i] << std::endl;
-    // }
+    std::cout << "Test continues..." << std::endl;
 
-    // std::cout << "=========Test hashmap_cpu ends=========" << std::endl;
+    std::cout << "=========Test hashmap_cpu begins=========" << std::endl;
 
-    // std::cout << "=========Test generate_pc starts=========" << std::endl;
+    HashTableCPU table;
+    const int num_lookups = 5;
+    int64_t keys_to_lookup[num_lookups] = {0, 1, 2, 3, 4};
+    int64_t lookup_results[num_lookups];
+    // table.insert_vals(); // TODO: implement insert() for HashTableCPU
+    table.lookup_vals(keys_to_lookup, lookup_results, num_lookups);
+    for (int i = 0; i < num_lookups; ++i) {
+        std::cout << "Key: " << keys_to_lookup[i] << ", Value: " << lookup_results[i] << std::endl;
+    }
 
+    std::cout << "=========Test hashmap_cpu ends=========" << std::endl;
 
-    // std::cout << "=========Test generate_pc ends=========" << std::endl;
+    std::cout << "Test continues..." << std::endl;
+
+    std::cout << "=========Test generate_pc starts=========" << std::endl;
+
+    const int size = 10;
+    auto PC = generateRandomPointCloud(size);
+    auto coords_rd = std::get<0>(PC).data();
+    auto feats_rd = std::get<1>(PC).data();
+
+    print_randomCoords("Random generated coords", coords_rd, size, 3);
+    print_randomFeats("Random generated feats", feats_rd, size, 4);
+
+    std::cout << "=========Test generate_pc ends=========" << std::endl;
  
+    std::cout << "Test ends..." << std::endl;
  
     return 0;
 
