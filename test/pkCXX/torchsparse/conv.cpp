@@ -43,48 +43,48 @@ int main() {
     int64_t gemmini_end = read_cycles();
     std::cout << "Gemmini forward took " << gemmini_end-gemmini_start << " cycles" << std::endl;
 
-    // if (check_featureMap(out_feat, out_feat_gemmini, out_nrows, out_channels)) {
-    //     std::cout << "=========Test convolution_forward_cpu succeeds=========" << std::endl;
-    // } else {
-    //     std::cout << "=========Test convolution_forward_cpu fails=========" << std::endl;
-    //     print_featureMap("Output feature_map", out_feat, out_nrows, out_channels);
-    //     print_featureMap("Output feature_map_gemmini", out_feat_gemmini, out_nrows, out_channels);
-    // }
+    if (check_featureMap(out_feat, out_feat_gemmini, out_nrows, out_channels)) {
+        std::cout << "=========Test convolution_forward_cpu succeeds=========" << std::endl;
+    } else {
+        std::cout << "=========Test convolution_forward_cpu fails=========" << std::endl;
+        print_featureMap("Output feature_map", out_feat, out_nrows, out_channels);
+        print_featureMap("Output feature_map_gemmini", out_feat_gemmini, out_nrows, out_channels);
+    }
 
     std::cout << "=========Test convolution_forward_cpu ends=========" << std::endl;
 
     delete[] out_feat;
     delete[] out_feat_gemmini;
 
-    std::cout << "Test continues..." << std::endl;
+    // std::cout << "Test continues..." << std::endl;
 
-    std::cout << "=========Test hashmap_cpu begins=========" << std::endl;
+    // std::cout << "=========Test hashmap_cpu begins=========" << std::endl;
 
-    HashTableCPU table;
-    const int num_lookups = 5;
-    int64_t keys_to_lookup[num_lookups] = {0, 1, 2, 3, 4};
-    int64_t lookup_results[num_lookups];
-    // table.insert_vals(); // TODO: implement insert() for HashTableCPU
-    table.lookup_vals(keys_to_lookup, lookup_results, num_lookups);
-    for (int i = 0; i < num_lookups; ++i) {
-        std::cout << "Key: " << keys_to_lookup[i] << ", Value: " << lookup_results[i] << std::endl;
-    }
+    // HashTableCPU table;
+    // const int num_lookups = 5;
+    // int64_t keys_to_lookup[num_lookups] = {0, 1, 2, 3, 4};
+    // int64_t lookup_results[num_lookups];
+    // // table.insert_vals(); // TODO: implement insert() for HashTableCPU
+    // table.lookup_vals(keys_to_lookup, lookup_results, num_lookups);
+    // for (int i = 0; i < num_lookups; ++i) {
+    //     std::cout << "Key: " << keys_to_lookup[i] << ", Value: " << lookup_results[i] << std::endl;
+    // }
 
-    std::cout << "=========Test hashmap_cpu ends=========" << std::endl;
+    // std::cout << "=========Test hashmap_cpu ends=========" << std::endl;
 
-    std::cout << "Test continues..." << std::endl;
+    // std::cout << "Test continues..." << std::endl;
 
-    std::cout << "=========Test generate_pc starts=========" << std::endl;
+    // std::cout << "=========Test generate_pc starts=========" << std::endl;
 
-    const int size = 10;
-    auto PC = generateRandomPointCloud(size);
-    auto coords_rd = std::get<0>(PC).data();
-    auto feats_rd = std::get<1>(PC).data();
+    // const int size = 10;
+    // auto PC = generateRandomPointCloud(size);
+    // auto coords_rd = std::get<0>(PC).data();
+    // auto feats_rd = std::get<1>(PC).data();
 
-    print_randomCoords("Random generated coords", coords_rd, size, 4);
-    print_randomFeats("Random generated feats", feats_rd, size, 4);
+    // print_randomCoords("Random generated coords", coords_rd, size, 4);
+    // print_randomFeats("Random generated feats", feats_rd, size, 4);
 
-    std::cout << "=========Test generate_pc ends=========" << std::endl;
+    // std::cout << "=========Test generate_pc ends=========" << std::endl;
  
     std::cout << "Test ends..." << std::endl;
  

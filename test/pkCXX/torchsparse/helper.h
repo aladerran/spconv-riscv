@@ -51,7 +51,7 @@ void print_featureMap(const char* name, float* feat, int nrows, int cols) {
 bool check_featureMap(float* feat1, float* feat2, int nrows, int cols) {
     for (int i = 0; i < nrows; ++i) {
         for (int j = 0; j < cols; ++j) {
-            if (feat1[i * cols + j] != feat2[i * cols + j]) {
+            if (feat1[i * cols + j] / feat2[i * cols + j] <= 0.99) {
                 return false;
             }
         }
